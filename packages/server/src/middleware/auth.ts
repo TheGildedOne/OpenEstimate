@@ -17,10 +17,11 @@ export interface AuthUser {
   name: string;
 }
 
-// Extend @fastify/jwt so TypeScript knows the shape of request.user
+// Extend @fastify/jwt so TypeScript knows the shape of request.user.
+// Only declare `user` (not `payload`) so SignPayloadType stays broad and
+// jwt.sign() continues to accept generic objects from DB queries.
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: AuthUser;
     user: AuthUser;
   }
 }
