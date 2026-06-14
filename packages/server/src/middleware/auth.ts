@@ -17,9 +17,10 @@ export interface AuthUser {
   name: string;
 }
 
-// Extend Fastify's request type so TypeScript knows about req.user
-declare module 'fastify' {
-  interface FastifyRequest {
+// Extend @fastify/jwt so TypeScript knows the shape of request.user
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: AuthUser;
     user: AuthUser;
   }
 }

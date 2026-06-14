@@ -18,6 +18,8 @@ export interface LineItemInput {
   laborHours: number;
   laborRate: number;
   wasteFactorPct: number;
+  /** When set, this item is a child of an assembly and should be excluded from section totals. */
+  parentItemId?: number | null;
 }
 
 export interface LineItemResult {
@@ -31,6 +33,20 @@ export interface SectionTotalsResult {
   totalLabor: number;
   totalCost: number;
   totalLaborHours: number;
+}
+
+export interface SectionInput {
+  id: number;
+  name?: string;
+  items: LineItemInput[];
+}
+
+export interface SectionTotalsWithId extends SectionTotalsResult {
+  sectionId: number;
+}
+
+export interface FullEstimateResult extends EstimateTotalsResult {
+  sectionTotals: SectionTotalsWithId[];
 }
 
 export interface EstimateTotalsInput {
@@ -88,11 +104,14 @@ export function calculateLineItem(item: LineItemInput): LineItemResult {
  * totalLaborHours = sum of (quantity × laborHours) for each item.
  */
 export function calculateSectionTotals(items: LineItemInput[]): SectionTotalsResult {
+  // Exclude assembly child items — their costs are rolled up into the parent assembly item
+  const topLevelItems = items.filter((item) => item.parentItemId == null);
+
   let totalMaterial = 0;
   let totalLabor = 0;
   let totalLaborHours = 0;
 
-  for (const item of items) {
+  for (const item of topLevelItems) {
     const calc = calculateLineItem(item);
     totalMaterial += calc.totalMaterial;
     totalLabor += calc.totalLabor;
@@ -144,19 +163,25 @@ export function calculateEstimateTotals({
 }
 
 /**
- * Convenience: given a list of all line items across an estimate, compute
- * the full estimate breakdown in one call.
+ * Compute a full estimate breakdown from an array of sections, each containing
+ * their own line items. Returns per-section totals plus estimate-level totals.
  */
 export function calculateFullEstimate(
-  items: LineItemInput[],
+  sections: SectionInput[],
   overheadPct: number,
   profitPct: number,
   taxPct: number,
   bondPct: number
-): SectionTotalsResult & EstimateTotalsResult {
-  const sectionTotals = calculateSectionTotals(items);
+): FullEstimateResult {
+  const sectionTotals: SectionTotalsWithId[] = sections.map((section) => ({
+    sectionId: section.id,
+    ...calculateSectionTotals(section.items),
+  }));
+
+  const subtotal = round2(sectionTotals.reduce((sum, s) => sum + s.totalCost, 0));
+
   const estimateTotals = calculateEstimateTotals({
-    subtotal: sectionTotals.totalCost,
+    subtotal,
     overheadPct,
     profitPct,
     taxPct,
@@ -164,10 +189,8 @@ export function calculateFullEstimate(
   });
 
   return {
-    ...sectionTotals,
     ...estimateTotals,
-    // Override subtotal from estimateTotals (identical to sectionTotals.totalCost)
-    subtotal: estimateTotals.subtotal,
+    sectionTotals,
   };
 }
 

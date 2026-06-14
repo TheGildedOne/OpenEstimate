@@ -102,8 +102,8 @@ describe('calculateLineItem', () => {
       wasteFactorPct: 5,
     });
     const result = calculateLineItem(item);
-    // Expected: 1234 * 45.99 * 1.05 = ~59,620.79 (rounded to 2 dp)
-    expect(result.totalMaterial).toBeCloseTo(59620.79, 1);
+    // Expected: 1234 * 45.99 * 1.05 = ~59,589.24 (rounded to 2 dp)
+    expect(result.totalMaterial).toBeCloseTo(59589.24, 1);
   });
 
   it('rounds to 2 decimal places', () => {
@@ -156,22 +156,23 @@ describe('calculateSectionTotals', () => {
 
 describe('calculateEstimateTotals', () => {
   it('calculates overhead, profit, tax, bond on correct base', () => {
-    const result = calculateEstimateTotals(10000, 15, 10, 8, 1);
+    const result = calculateEstimateTotals({ subtotal: 10000, overheadPct: 15, profitPct: 10, taxPct: 8, bondPct: 1 });
     expect(result.subtotal).toBe(10000);
     // overhead = 10000 * 0.15 = 1500
     expect(result.overheadAmt).toBe(1500);
     // profit = (10000 + 1500) * 0.10 = 1150
     expect(result.profitAmt).toBe(1150);
-    // tax = 10000 * 0.08 = 800
-    expect(result.taxAmt).toBe(800);
-    // bond = (10000) * 0.01 = 100
-    expect(result.bondAmt).toBe(100);
-    // grand total = subtotal + overhead + profit + tax + bond
-    expect(result.grandTotal).toBe(10000 + 1500 + 1150 + 800 + 100);
+    // preTaxTotal = 10000 + 1500 + 1150 = 12650
+    // tax = 12650 * 0.08 = 1012
+    expect(result.taxAmt).toBe(1012);
+    // bond = (12650 + 1012) * 0.01 = 136.62
+    expect(result.bondAmt).toBe(136.62);
+    // grand total = 12650 + 1012 + 136.62
+    expect(result.grandTotal).toBe(13798.62);
   });
 
   it('returns subtotal as grand total when all percentages are zero', () => {
-    const result = calculateEstimateTotals(50000, 0, 0, 0, 0);
+    const result = calculateEstimateTotals({ subtotal: 50000, overheadPct: 0, profitPct: 0, taxPct: 0, bondPct: 0 });
     expect(result.grandTotal).toBe(50000);
     expect(result.overheadAmt).toBe(0);
     expect(result.profitAmt).toBe(0);
@@ -180,7 +181,7 @@ describe('calculateEstimateTotals', () => {
   });
 
   it('handles zero subtotal', () => {
-    const result = calculateEstimateTotals(0, 15, 10, 8, 1);
+    const result = calculateEstimateTotals({ subtotal: 0, overheadPct: 15, profitPct: 10, taxPct: 8, bondPct: 1 });
     expect(result.grandTotal).toBe(0);
   });
 });

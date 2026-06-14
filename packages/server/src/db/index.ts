@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Extract the file path from the URL (strips leading 'file:')
-const dbPath = config.databaseUrl.replace(/^file:/, '');
+const dbPath = config.DATABASE_URL.replace(/^file:/, '');
 const resolvedPath = path.resolve(dbPath);
 
 // Ensure the data directory exists
