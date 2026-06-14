@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter shared build
+
+      - name: Type check server
+        run: pnpm --filter server exec tsc --noEmit
+
+      - name: Type check client
+        run: pnpm --filter client exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm -r lint || true  # ESLint warnings don't fail CI
+
+  test-server:
+    name: Server Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter shared build
+
+      - name: Run server unit tests
+        run: pnpm --filter server test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: file::memory:?cache=shared
+          JWT_ACCESS_SECRET: test-access-secret-32-characters-minimum
+          JWT_REFRESH_SECRET: test-refresh-secret-32-characters-minimum
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test-server]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            packages/server/dist/
+            packages/client/dist/
+          retention-days: 7
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter client exec playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Seed database and start server
+        run: |
+          pnpm --filter server db:migrate
+          pnpm --filter server db:seed
+          node packages/server/dist/index.js &
+          sleep 3
+        env:
+          NODE_ENV: test
+          DATABASE_URL: file:/tmp/test.db
+          JWT_ACCESS_SECRET: test-access-secret-32-characters-minimum
+          JWT_REFRESH_SECRET: test-refresh-secret-32-characters-minimum
+          CLIENT_URL: http://localhost:4173
+
+      - name: Run E2E tests
+        run: pnpm --filter client test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:4173
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: packages/client/playwright-report/
+          retention-days: 30

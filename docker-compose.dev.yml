@@ -1,0 +1,46 @@
+version: '3.9'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: server-dev
+    container_name: openestimate-server-dev
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: file:/data/openestimate-dev.db
+      JWT_ACCESS_SECRET: dev-access-secret-do-not-use-in-prod
+      JWT_REFRESH_SECRET: dev-refresh-secret-do-not-use-in-prod
+      CLIENT_URL: http://localhost:5173
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_PATH: /data/uploads
+    volumes:
+      - ./packages/server:/app/packages/server
+      - ./packages/shared:/app/packages/shared
+      - dev_data:/data
+      - /app/node_modules
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: client-dev
+    container_name: openestimate-client-dev
+    restart: unless-stopped
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:3001
+    volumes:
+      - ./packages/client:/app/packages/client
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+    depends_on:
+      - server
+
+volumes:
+  dev_data:
