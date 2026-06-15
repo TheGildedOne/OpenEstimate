@@ -17,11 +17,19 @@ export interface AuthUser {
   name: string;
 }
 
-// Extend @fastify/jwt so TypeScript knows the shape of request.user.
-// Only declare `user` (not `payload`) so SignPayloadType stays broad and
-// jwt.sign() continues to accept generic objects from DB queries.
+// Two-pronged type augmentation:
+// 1. FastifyJWT.user resolves @fastify/jwt's conditional UserType to AuthUser
+// 2. FastifyRequest.user gives TypeScript a concrete (non-conditional) type so
+//    preHandler overload resolution can structurally compare FastifyRequest
+//    instances without hitting deferred conditional type evaluation failures.
 declare module '@fastify/jwt' {
   interface FastifyJWT {
+    user: AuthUser;
+  }
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
     user: AuthUser;
   }
 }
